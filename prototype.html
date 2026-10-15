@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Детектор зажора</title>
+<style>
+body { background: #FFE5EC; font-family: Arial, sans-serif; padding: 20px; margin: 0; }
+.app { max-width: 480px; margin: 0 auto; background: #FFFCF7; border-radius: 20px; padding: 20px; border: 3px solid #FFD1DC; box-sizing: border-box; }
+h1 { text-align: center; color: #FF8FAB; font-size: 22px; margin: 0 0 5px; }
+.subtitle { text-align: center; color: #A0C4FF; font-size: 13px; margin-bottom: 15px; }
+.chat { min-height: 220px; max-height: 340px; overflow-y: auto; background: #FFF5F8; border-radius: 15px; padding: 15px; margin-bottom: 10px; border: 2px dashed #B5EAD7; }
+.msg { padding: 10px 14px; margin-bottom: 10px; border-radius: 12px; max-width: 85%; font-size: 14px; line-height: 1.4; }
+.bot { background: #E0F4FF; color: #4A6572; }
+.user { background: #FFE5EC; color: #7A4A5A; text-align: right; margin-left: auto; }
+.allergy-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px; }
+.allergy-item { background: #FFF0F5; border: 2px solid #FFD1DC; border-radius: 12px; padding: 10px; text-align: center; font-size: 13px; cursor: pointer; color: #666; user-select: none; transition: 0.2s; }
+.allergy-item.selected { background: #FFB5C5; color: #fff; border-color: #FF8FAB; font-weight: bold; }
+.allergy-title { text-align: center; color: #7FB77E; font-size: 14px; margin-bottom: 10px; font-weight: bold; }
+button { display: block; width: 100%; padding: 12px; margin-bottom: 8px; border: none; border-radius: 12px; background: #FFD1DC; color: #5A3A45; font-size: 14px; font-weight: bold; cursor: pointer; font-family: inherit; transition: 0.2s; }
+button:hover { background: #FFB5C5; }
+button.clear-btn { background: #e0e0e0; color: #555; }
+button.clear-btn:hover { background: #d0d0d0; }
+button.clear-btn.selected { background: #B5EAD7; color: #3A5A3A; border: 2px solid #7FB77E; }
+button.green { background: #B5EAD7; color: #3A5A3A; }
+button.blue { background: #A0C4FF; color: #2A3A5A; }
+button.yellow { background: #FFE066; color: #5A4A00; }
+button.back-btn { background: #f5f5f5; color: #888; font-size: 13px; padding: 8px; }
+button.back-btn:hover { background: #e8e8e8; }
+.ulik { margin-top: 15px; padding: 10px; background: #FFF9E5; border-radius: 12px; color: #B8860B; text-align: center; font-weight: bold; font-size: 13px; }
+.screen { display: none; }
+.screen.active { display: block; }
+.progress { text-align: center; color: #999; font-size: 12px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="screen active" id="screen-start">
+<h1>🔍 Детектор зажора</h1>
+<div class="subtitle">Детективное агентство по борьбе с эмоциональным голодом</div>
+<div class="allergy-title">🚨 Отметьте, на что у вас аллергия:</div>
+<div class="allergy-list">
+<div class="allergy-item" data-a="nuts">🥜 Орехи</div>
+<div class="allergy-item" data-a="milk">🥛 Молоко</div>
+<div class="allergy-item" data-a="gluten">🌾 Глютен</div>
+<div class="allergy-item" data-a="citrus">🍊 Цитрусы</div>
+<div class="allergy-item" data-a="honey">🍯 Мёд</div>
+<div class="allergy-item" data-a="eggs">🥚 Яйца</div>
+<div class="allergy-item" data-a="fish">🐟 Рыба</div>
+<div class="allergy-item" data-a="soy">🫘 Соя</div>
+<div class="allergy-item" data-a="sesame">🌰 Кунжут</div>
+<div class="allergy-item" data-a="chocolate">🍫 Шоколад</div>
+<div class="allergy-item" data-a="berries">🍓 Ягоды</div>
+<div class="allergy-item" data-a="corn">🌽 Кукуруза</div>
+</div>
+<button class="clear-btn" id="noAllergyBtn" onclick="toggleNoAllergies()">🙅‍♀️ У меня нет аллергий</button>
+<button class="green" onclick="startApp()">Готово, начать расследование</button>
+</div>
+
+<div class="screen" id="screen-main">
+<h1>🔍 Детектор зажора</h1>
+<div class="subtitle">Дело ведёт детектив Зажоров</div>
+<div class="progress" id="progress"></div>
+<div class="chat" id="chat"></div>
+<div id="buttons"></div>
+<button class="back-btn" onclick="goBack()">⬅️ Назад</button>
+<div class="ulik" id="ulik">🏅 Улик собрано: 0</div>
+</div>
+
+</div>
+
+<script>
+var allergies = {};
+var noAllergiesMode = false;
+var chatEl = document.getElementById('chat');
+var buttonsEl = document.getElementById('buttons');
+var ulikEl = document.getElementById('ulik');
+var progEl = document.getElementById('progress');
+var noAllergyBtn = document.getElementById('noAllergyBtn');
+var uliki = 0;
+var score = 0;
+var historyStack = []; // переименовано, чтобы не конфликтовать с window.history
+var currentBtns = [];
+
+var items = document.querySelectorAll('.allergy-item');
+for (var i = 0; i < items.length; i++) {
+items[i].onclick = function() {
+if (noAllergiesMode) return;
+var a = this.getAttribute('data-a');
+if (allergies[a]) {
+allergies[a] = false;
+this.classList.remove('selected');
+} else {
+allergies[a] = true;
+this.classList.add('selected');
+}
+};
+}
+
+function toggleNoAllergies() {
+noAllergiesMode = !noAllergiesMode;
+if (noAllergiesMode) {
+allergies = {};
+var allItems = document.querySelectorAll('.allergy-item');
+for (var k = 0; k < allItems.length; k++) {
+allItems[k].classList.remove('selected');
+}
+noAllergyBtn.classList.add('selected');
+} else {
+noAllergyBtn.classList.remove('selected');
+}
+}
+
+function startApp() {
+document.getElementById('screen-start').classList.remove('active');
+document.getElementById('screen-main').classList.add('active');
+newCase();
+}
+
+function newCase() {
+score = 0;
+historyStack = [];
+currentBtns = [];
+chatEl.innerHTML = '';
+progEl.textContent = '';
+addMsg('Следующее дело. Готовы к расследованию?', 'bot');
+setButtons([{text: '🚨 Совершено преступление!', action: q1, cls: 'yellow'}]);
+}
+
+function addMsg(text, who) {
+var d = document.createElement('div');
+d.className = 'msg ' + who;
+d.textContent = text;
+chatEl.appendChild(d);
+chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function renderButtons() {
+buttonsEl.innerHTML = '';
+for (var i = 0; i < currentBtns.length; i++) {
+(function(item) {
+var btn = document.createElement('button');
+btn.textContent = item.text;
+if (item.cls) btn.className = item.cls;
+btn.onclick = function() { item.action(); };
+buttonsEl.appendChild(btn);
+})(currentBtns[i]);
+}
+}
+
+function setButtons(list) {
+currentBtns = list;
+renderButtons();
+saveState();
+}
+
+function saveState() {
+historyStack.push({
+chat: chatEl.innerHTML,
+btns: currentBtns.slice(),
+prog: progEl.textContent,
+score: score
+});
+}
+
+function goBack() {
+if (historyStack.length <= 1) {
+addMsg('Это самое начало расследования — назад уже некуда. Начнём дело!', 'bot');
+return;
+}
+historyStack.pop();
+var prev = historyStack[historyStack.length - 1];
+chatEl.innerHTML = prev.chat;
+chatEl.scrollTop = chatEl.scrollHeight;
+currentBtns = prev.btns.slice();
+renderButtons();
+progEl.textContent = prev.prog;
+score = prev.score;
+}
+
+function addUlik(name) {
+uliki = uliki + 1;
+ulikEl.textContent = '🏅 Улик собрано: ' + uliki + (name ? ' (последняя: ' + name + ')' : '');
+}
+
+function q1() {
+addMsg('Хочу есть!', 'user');
+addMsg('Так-с. Начинаю расследование. Вопрос 1 из 4: когда ты последний раз ел(а)?', 'bot');
+progEl.textContent = 'Вопрос 1 из 4';
+setButtons([
+{text: '⏰ Меньше 2 часов назад', action: function() { q1Answer(0, 'Меньше 2 часов назад'); }, cls: 'blue'},
+{text: '🍽 Больше 3 часов назад', action: function() { q1Answer(2, 'Больше 3 часов назад'); }, cls: 'blue'}
+]);
+}
+
+function q1Answer(addScore, label) {
+score = score + addScore;
+addMsg(label, 'user');
+q2();
+}
+
+function q2() {
+addMsg('Вопрос 2 из 4: у тебя урчит в животе или сосёт под ложечкой?', 'bot');
+progEl.textContent = 'Вопрос 2 из 4';
+setButtons([
+{text: '🔊 Да, урчит', action: function() { q2Answer(2, 'Да, урчит'); }, cls: 'blue'},
+{text: '🤔 Нет, тихо', action: function() { q2Answer(0, 'Нет, тихо'); }, cls: 'blue'}
+]);
+}
+
+function q2Answer(addScore, label) {
+score = score + addScore;
+addMsg(label, 'user');
+q3();
+}
+
+function q3() {
+addMsg('Вопрос 3 из 4: как ты себя чувствуешь?', 'bot');
+progEl.textContent = 'Вопрос 3 из 4';
+setButtons([
+{text: '😵 Слабость, пустота', action: function() { q3Answer(2, 'Слабость, пустота'); }, cls: 'blue'},
+{text: '😐 Просто хочу пожевать', action: function() { q3Answer(0, 'Просто хочу пожевать'); }, cls: 'blue'},
+{text: '😊 Бодро, всё хорошо', action: function() { q3Answer(0, 'Бодро, всё хорошо'); }, cls: 'green'},
+{text: '🔋 Полон(а) энергии', action: function() { q3Answer(0, 'Полон(а) энергии'); }, cls: 'green'},
+{text: '😌 Спокойно и расслабленно', action: function() { q3Answer(0, 'Спокойно и расслабленно'); }, cls: 'green'},
+{text: '🤔 Не могу понять', action: function() { q3Answer(1, 'Не могу понять'); }, cls: 'blue'}
+]);
+}
+
+function q3Answer(addScore, label) {
+score = score + addScore;
+addMsg(label, 'user');
+q4();
+}
+
+function q4() {
+addMsg('Вопрос 4 из 4: может, ты хочешь пить? Иногда жажда маскируется под голод.', 'bot');
+progEl.textContent = 'Вопрос 4 из 4';
+setButtons([
+{text: '💧 Да, может быть', action: function() { q4Answer(true); }, cls: 'blue'},
+{text: '🍽 Нет, точно хочу есть', action: function() { q4Answer(false); }, cls: 'blue'}
+]);
+}
+
+function q4Answer(isThirst) {
+if (isThirst) {
+addMsg('Да, может быть', 'user');
+addMsg('💧 Вот оно что! Это жажда маскируется под голод. Выпей стакан воды и подожди 15 минут. Если голод пройдёт — это была именно жажда!', 'bot');
+addUlik('Распознал жажду');
+setButtons([{text: '🔄 Новое дело', action: newCase, cls: 'green'}]);
+return;
+}
+addMsg('Нет, точно хочу есть', 'user');
+progEl.textContent = '';
+if (score >= 4) {
+addMsg('🕵️ Диагноз: это настоящий, физический голод. Твоё тело реально просит топлива!', 'bot');
+addMsg('Съешь что-то полезное и сытное: овощ, фрукт, кашу или что-то с белком. Дело закрыто! ✅', 'bot');
+addUlik('Честный голод');
+setButtons([{text: '🔄 Новое дело', action: newCase, cls: 'green'}]);
+} else {
+addMsg('🕵️ Диагноз: скорее всего, это НЕ настоящий голод. Тело накормлено, но мозг просит вкусного. Это эмоциональное преступление!', 'bot');
+setTimeout(askEmotion, 800);
+}
+}
+
+function askEmotion() {
+addMsg('А какие эмоции нас посетили?', 'bot');
+setButtons([
+{text: '😰 Стресс', action: function() { askCraving('стресс'); }, cls: 'blue'},
+{text: '😴 Скука', action: function() { askCraving('скуку'); }, cls: 'green'},
+{text: '😢 Грусть', action: function() { askCraving('грусть'); }, cls: 'blue'},
+{text: '😡 Злость', action: function() { askCraving('злость'); }, cls: 'yellow'},
+{text: '😊 Радость', action: function() { askCraving('радость'); }, cls: 'green'},
+{text: '🎉 Восторг', action: function() { askCraving('восторг'); }, cls: 'green'},
+{text: '💪 Вдохновение', action: function() { askCraving('вдохновение'); }, cls: 'green'},
+{text: '🥳 Праздник', action: function() { askCraving('праздник'); }, cls: 'green'}
+]);
+}
+
+function askCraving(emotion) {
+addMsg('Это ' + emotion, 'user');
+addMsg('А что именно хочется съесть?', 'bot');
+setButtons([
+{text: '🍫 Сладкое', action: function() { pick(emotion, 'sweet'); }, cls: 'yellow'},
+{text: '🍟 Солёное', action: function() { pick(emotion, 'salty'); }, cls: 'yellow'},
+{text: '🍔 Жирное', action: function() { pick(emotion, 'fatty'); }, cls: 'yellow'},
+{text: '🥨 Хрустящее', action: function() { pick(emotion, 'crunchy'); }, cls: 'yellow'}
+]);
+}
+
+function pick(emotion, type) {
+addMsg('Хочу ' + type, 'user');
+var opts = [];
+if (type === 'sweet') {
+opts = [
+{name: '🍓 Ягоды', a: 'berries'}, {name: '🍌 Банан', a: null},
+{name: '🍎 Яблоко', a: null}, {name: '🍇 Виноград', a: null},
+{name: '🌰 Финики', a: null}, {name: '🍊 Апельсин', a: 'citrus'},
+{name: '🥜 Орехи', a: 'nuts'}, {name: '🍯 Мёд', a: 'honey'},
+{name: '🍫 Тёмный шоколад', a: 'chocolate'}
+];
+} else if (type === 'salty') {
+opts = [
+{name: '🥒 Огурец', a: null}, {name: '🥕 Морковь', a: null},
+{name: '🫑 Перец', a: null}, {name: '🌽 Кукуруза', a: 'corn'},
+{name: '🎃 Семечки', a: null}, {name: '🫘 Нут', a: 'soy'},
+{name: '🥜 Орехи', a: 'nuts'}, {name: '🧀 Сыр', a: 'milk'},
+{name: '🍞 Хлебец', a: 'gluten'}
+];
+} else if (type === 'fatty') {
+opts = [
+{name: '🥑 Авокадо', a: null}, {name: '🍗 Курица', a: null},
+{name: '🐟 Рыба', a: 'fish'}, {name: '🫒 Оливки', a: null},
+{name: '🥚 Яйцо', a: 'eggs'}, {name: '🥜 Орехи', a: 'nuts'},
+{name: '🧀 Сыр', a: 'milk'}, {name: '🥩 Мясо', a: null}
+];
+} else {
+opts = [
+{name: '🥒 Огурец', a: null}, {name: '🥕 Морковь', a: null},
+{name: '🫑 Перец', a: null}, {name: '🍎 Яблоко', a: null},
+{name: '🥬 Капуста', a: null}, {name: '🎃 Семечки', a: null},
+{name: '🥜 Орехи', a: 'nuts'}, {name: '🍞 Хлебец', a: 'gluten'},
+{name: '🌽 Кукуруза', a: 'corn'}
+];
+}
+
+var safe = [];
+for (var i = 0; i < opts.length; i++) {
+if (!opts[i].a || !allergies[opts[i].a]) safe.push(opts[i]);
+}
+
+if (safe.length === 0) {
+addMsg('Ой! На все варианты у тебя аллергия. Тогда просто выпей воды и сделай 10 приседаний.', 'bot');
+addUlik('Водный детектив');
+setButtons([{text: '🔄 Новое дело', action: newCase, cls: 'green'}]);
+return;
+}
+
+var text = '💡 Полезная замена: ';
+for (var j = 0; j < safe.length; j++) {
+text = text + safe[j].name;
+if (j < safe.length - 1) text = text + ', ';
+}
+text = text + '.';
+addMsg(text, 'bot');
+addMsg('Выбирай, что тебе больше нравится:', 'bot');
+
+var btns = [];
+for (var k = 0; k < safe.length; k++) {
+btns.push(makeBtn(safe[k].name));
+}
+btns.push({
+text: '🚫 Всё равно хочу вредное',
+action: function() { stillJunk(emotion); },
+cls: 'blue'
+});
+setButtons(btns);
+}
+
+function makeBtn(name) {
+return {
+text: name,
+action: function() {
+addMsg('Выбрал(а): ' + name, 'user');
+addMsg('🏅 Отличный выбор! Ты обманул(а) свой мозг и накормил(а) тело пользой. Так держать!', 'bot');
+addMsg('Если вдруг через 10 минут всё равно захочется вредного — съешь маленькую порцию и без чувства вины. Ты сегодня уже молодец! 💚', 'bot');
+addUlik(name);
+setButtons([{text: '🔄 Новое дело', action: newCase, cls: 'green'}]);
+},
+cls: 'green'
+};
+}
+
+function stillJunk(emotion) {
+addMsg('Всё равно хочу вредное!', 'user');
+addMsg('Понимаю. Но давай так: сначала попробуй что-то полезное. Если через 10 минут всё ещё захочется — съешь маленькую порцию вредного, но осознанно и без вины.', 'bot');
+setButtons([
+{
+text: '🥗 Ок, попробую полезное',
+action: function() {
+addMsg('Ок, попробую полезное', 'user');
+addMsg('Вот это характер! Выбери что-то из списка выше и попробуй. А если не получится — маленькая порция вредного тебя ждёт. Ты справишься! 💪', 'bot');
+addUlik('Сила воли');
+setButtons([{text: '🔄 Новое дело', action: newCase, cls: 'green'}]);
+},
+cls: 'green'
+},
+{
+text: '😔 Нет, сразу маленькую порцию',
+action: function() {
+addMsg('Нет, сразу маленькую порцию', 'user');
+addMsg('Хорошо. Съешь маленькую порцию — но медленно, с удовольствием и без чувства вины. Ты честно признал(а), что это эмоции, а не голод. Это уже победа! 🎉', 'bot');
+addUlik('Осознанный выбор');
+setButtons([{text: '🔄 Новое дело', action: newCase, cls: 'green'}]);
+},
+cls: 'blue'
+}
+]);
+}
+</script>
+</body>
+</html>
